@@ -9,6 +9,7 @@ on:
 jobs:
   backend-install:
     name: Backend install check
+    environment: ENV
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
