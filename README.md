@@ -92,4 +92,4 @@ npm run dev
 ```
 
 # Usage
-After starting the application, visit http://localhost:5173 in your browser. Users can now register for a new account or log in using existing credentials.
+After starting the application, open the frontend URL exposed by your container or ingress. Users can then register for a new account or log in using existing credentials.
