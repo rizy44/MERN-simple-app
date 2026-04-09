@@ -20,7 +20,10 @@ jobs:
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
-
+      - name: Validate Docker Hub secrets
+        run: |
+          [ -n "${{ secrets.DOCKERHUB_USERNAME }}" ] || (echo "DOCKERHUB_USERNAME is empty" && exit 1)
+          [ -n "${{ secrets.DOCKERHUB_TOKEN }}" ] || (echo "DOCKERHUB_TOKEN is empty" && exit 1)
       - name: Login to Docker Hub
         uses: docker/login-action@v3
         with:
