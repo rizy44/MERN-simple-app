@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import "../styles/Dashboard.css";
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
 import axios from 'axios';
 
 const Dashboard = () => {
-  const [ token, setToken ] = useState(JSON.parse(localStorage.getItem("auth")) || "");
+  const [ token ] = useState(JSON.parse(localStorage.getItem("auth")) || "");
   const [ data, setData ] = useState({});
   const navigate = useNavigate();
 

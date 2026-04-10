@@ -14,7 +14,7 @@ import { toast } from "react-toastify";
 const Login = () => {
   const [ showPassword, setShowPassword ] = useState(false);
   const navigate = useNavigate();
-  const [ token, setToken ] = useState(JSON.parse(localStorage.getItem("auth")) || "");
+  const [ token ] = useState(JSON.parse(localStorage.getItem("auth")) || "");
 
 
 
@@ -35,7 +35,7 @@ const Login = () => {
           password
         };
         try{
-        const response = await axios.post("/api/v1/register", formData);
+        await axios.post("/api/v1/register", formData);
          toast.success("Registration successfull");
          navigate("/login");
        }catch(err){
