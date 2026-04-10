@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import "../styles/Dashboard.css";
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-toastify';
@@ -9,7 +9,7 @@ const Dashboard = () => {
   const [ data, setData ] = useState({});
   const navigate = useNavigate();
 
-  const fetchLuckyNumber = async () => {
+  const fetchLuckyNumber = useCallback(async () => {
 
     let axiosConfig = {
       headers: {
@@ -23,17 +23,18 @@ const Dashboard = () => {
     } catch (error) {
       toast.error(error.message);
     }
-  }
+  }, [token]);
 
 
   
   useEffect(() => {
-    fetchLuckyNumber();
     if(token === ""){
       navigate("/login");
       toast.warn("Please login first to access dashboard");
+      return;
     }
-  }, [token]);
+    fetchLuckyNumber();
+  }, [token, navigate, fetchLuckyNumber]);
 
   return (
     <div className='dashboard-main'>

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "../assets/image.png";
 import Logo from "../assets/logo.png";
 import GoogleSvg from "../assets/icons8-google.svg";
@@ -58,7 +58,7 @@ const Login = () => {
       toast.success("You already logged in");
       navigate("/dashboard");
     }
-  }, []);
+  }, [token, navigate]);
 
   return (
     <div className="register-main">

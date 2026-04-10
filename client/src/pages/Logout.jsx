@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react'
+import { useEffect } from "react";
 import "../styles/Logout.css";
 import { useNavigate } from 'react-router-dom';
 
@@ -11,7 +11,7 @@ const Logout = () => {
         setTimeout(() => {
             navigate("/");
         }, 3000);
-    }, []);
+    }, [navigate]);
 
   return (
     <div className='logout-main'>

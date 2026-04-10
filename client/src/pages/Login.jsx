@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "../assets/image.png";
 import Logo from "../assets/logo.png";
 import GoogleSvg from "../assets/icons8-google.svg";
@@ -48,7 +48,7 @@ const Login = () => {
       toast.success("You already logged in");
       navigate("/dashboard");
     }
-  }, []);
+  }, [token, navigate]);
 
   return (
     <div className="login-main">
@@ -108,7 +108,7 @@ const Login = () => {
           </div>
 
           <p className="login-bottom-p">
-            Don't have an account? <Link to="/register">Sign Up</Link>
+            Don&apos;t have an account? <Link to="/register">Sign Up</Link>
           </p>
         </div>
       </div>
