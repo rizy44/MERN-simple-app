@@ -66,4 +66,4 @@ jobs:
             --set backend.image.tag="backend-${{ steps.vars.outputs.tag }}" \
             --set frontend.image.repository="${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_REPOSITORY }}" \
             --set frontend.image.tag="frontend-${{ steps.vars.outputs.tag }}" \
-            --wait --timeout 5m
+            --wait --timeout 5m --atomic
