@@ -3,6 +3,10 @@ kind: Service
 metadata:
   name: {{ .Values.service.backend.name }}
   namespace: {{ .Release.Namespace }}
+  annotations:
+    prometheus.io/scrape: "{{ .Values.metrics.enabled }}"
+    prometheus.io/path: "{{ .Values.metrics.path }}"
+    prometheus.io/port: "{{ .Values.metrics.port }}"
 spec:
   type: {{ .Values.service.type }}
   ports:

@@ -6,10 +6,14 @@ const express = require("express");
 const cors = require('cors')
 const app = express();
 const mainRouter = require("./routes/user");
+const metricsRouter = require("./routes/metrics");
+const metricsMiddleware = require("./middleware/httpMetrics");
 
 app.use(express.json());
 
 app.use(cors())
+app.use("/metrics", metricsRouter);
+app.use(metricsMiddleware);
 app.use("/api/v1", mainRouter);
 //////////////////////////////////////////////////////////
 app.get('/api/v1/health', (req, res) => {

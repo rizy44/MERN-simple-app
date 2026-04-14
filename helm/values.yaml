@@ -61,6 +61,11 @@ service:
     port: 80
   type: ClusterIP
 
+metrics:
+  enabled: true
+  path: /metrics
+  port: "4000"
+
 
 frontend:
   name: mern-frontend
