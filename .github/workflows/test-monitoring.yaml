@@ -78,7 +78,7 @@ jobs:
             sleep 15
           done
 
-          helm repo add prometheus-community "$REPO_URL" --force-update
+          helm repo add prometheus-community "$REPO_URL" --force-update --timeout 15m
 
           for attempt in 1 2 3; do
             echo "[$attempt/3] Updating Helm repositories..."
