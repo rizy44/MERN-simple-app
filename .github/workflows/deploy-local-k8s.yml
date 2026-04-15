@@ -35,7 +35,7 @@ jobs:
       - name: Setup Helm
         uses: azure/setup-helm@v4
         with:
-          version: v3.14.4
+          version: v3.20.1
 
       - name: Setup kubeconfig
         shell: bash

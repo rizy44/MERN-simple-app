@@ -1,0 +1,70 @@
+name: Deploy Monitoring Stack
+
+on:
+  workflow_run:
+    workflows: ["Deploy to Local Kubernetes"]
+    types: [completed]
+    branches: [main]
+
+env:
+  HELM_MONITOR_PATH: ./helm_value_monitoring
+
+jobs:
+  deploy-monitoring:
+    name: Deploy Prometheus and Grafana
+    environment: ENV
+    if: github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success'
+    runs-on: [self-hosted, linux]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.29.0
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.20.1
+
+      - name: Setup kubeconfig
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.kube"
+          echo "${{ secrets.KUBE_CONFIG }}" > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Add Prometheus Helm repository
+        shell: bash
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo update
+
+      - name: Deploy monitoring stack
+        shell: bash
+        run: |
+          helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+            --namespace monitoring \
+            --create-namespace \
+            -f "${{ env.HELM_MONITOR_PATH }}/prometheus-values.yaml" \
+            -f "${{ env.HELM_MONITOR_PATH }}/grafana-values.yaml" \
+            -f "${{ env.HELM_MONITOR_PATH }}/alertmanager-config.yaml" \
+            --wait --timeout 10m --atomic
+      
+      - name: Deploy custom alert and dashboard
+        shell: bash
+        run: |
+          kubectl -n monitoring apply -f "${{ env.HELM_MONITOR_PATH }}/service-monitor.yaml"
+          kubectl -n monitoring apply -f "${{ env.HELM_MONITOR_PATH }}/custom-alert.yaml"
+          kubectl -n monitoring apply -f "${{ env.HELM_MONITOR_PATH }}/custom-dashboard.yaml"
+
+      - name: Post-deployment check
+        shell: bash
+        run: |
+          echo "Checking Prometheus and Grafana pods status..."
+          kubectl -n monitoring get pods -l release=prometheus -o jsonpath='{.items[*].status.phase}' | grep -q "Running" || (echo "Prometheus pods are not running" && exit 1)
+          kubectl -n monitoring get pods -l release=prometheus-grafana -o jsonpath='{.items[*].status.phase}' | grep -q "Running" || (echo "Grafana pods are not running" && exit 1)
+
+

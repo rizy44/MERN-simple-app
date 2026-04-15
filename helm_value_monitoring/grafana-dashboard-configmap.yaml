@@ -1,0 +1,27 @@
+# grafana-dashboard-configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: custom-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  my-dashboard.json: |
+    {
+      "dashboard": {
+        "title": "My Application Dashboard",
+        "panels": [
+          {
+            "title": "Request Rate",
+            "type": "graph",
+            "targets": [
+              {
+                "expr": "rate(http_requests_total[5m])",
+                "legendFormat": "{{method}} {{path}}"
+              }
+            ]
+          }
+        ]
+      }
+    }
