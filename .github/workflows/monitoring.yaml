@@ -39,15 +39,28 @@ jobs:
       - name: Substitute secrets in alertmanager config
         shell: bash
         run: |
-          # Create temp file with secrets substituted
-          envsubst < "${{ env.HELM_MONITOR_PATH }}/alertmanager-config.yaml" > /tmp/alertmanager-config.yaml
+          if [ -z "${SLACK_WEBHOOK_URL}" ]; then
+            echo "SLACK_WEBHOOK_URL secret is not set"
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+
+          source = Path("${{ env.HELM_MONITOR_PATH }}/alertmanager-config.yaml")
+          target = Path("/tmp/alertmanager-config.yaml")
+          content = source.read_text()
+          content = content.replace("${SLACK_WEBHOOK_URL}", os.environ["SLACK_WEBHOOK_URL"])
+          target.write_text(content)
+          PY
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
       - name: Deploy monitoring stack
         shell: bash
         run: |
-          helm upgrade prometheus prometheus-community/kube-prometheus-stack \
+          helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
             --namespace monitoring \
             --create-namespace \
             -f "${{ env.HELM_MONITOR_PATH }}/prometheus-values.yaml" \
@@ -59,8 +72,8 @@ jobs:
         shell: bash
         run: |
           kubectl -n monitoring apply -f "${{ env.HELM_MONITOR_PATH }}/service-monitor.yaml"
-          kubectl -n monitoring apply -f "${{ env.HELM_MONITOR_PATH }}/custom-alert.yaml"
-          kubectl -n monitoring apply -f "${{ env.HELM_MONITOR_PATH }}/custom-dashboard.yaml"
+          kubectl -n monitoring apply -f "${{ env.HELM_MONITOR_PATH }}/custom-alerts.yaml"
+          kubectl -n monitoring apply -f "${{ env.HELM_MONITOR_PATH }}/grafana-dashboard-configmap.yaml"
 
       - name: Post-deployment check
         shell: bash
