@@ -1,10 +1,8 @@
 name: Deploy Monitoring Stack
 
 on:
-  workflow_run:
-    workflows: ["Deploy to Local Kubernetes"]
-    types: [completed]
-    branches: [main]
+  push:
+    branches: [test-monitoring-only]
   workflow_dispatch:
 
 env:
@@ -16,7 +14,7 @@ jobs:
     environment: ENV
     if: >
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
+      github.event_name == 'push'
     runs-on: [self-hosted, linux]
     steps:
       - name: Checkout
@@ -63,8 +61,38 @@ jobs:
       - name: Add and update Prometheus Helm repo
         shell: bash
         run: |
-          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --timeout 15m
-          helm repo update
+          set -euo pipefail
+          REPO_URL="https://prometheus-community.github.io/helm-charts"
+
+          for attempt in 1 2 3; do
+            echo "[$attempt/3] Checking Helm repo reachability..."
+            if curl -fsSL --max-time 30 "$REPO_URL/index.yaml" > /dev/null; then
+              break
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "Cannot reach $REPO_URL from this runner. Check DNS/firewall/proxy settings."
+              exit 1
+            fi
+
+            sleep 15
+          done
+
+          helm repo add prometheus-community "$REPO_URL" --force-update --timeout 15m
+
+          for attempt in 1 2 3; do
+            echo "[$attempt/3] Updating Helm repositories..."
+            if helm repo update; then
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 3 ]; then
+              echo "helm repo update failed after 3 attempts"
+              exit 1
+            fi
+
+            sleep 15
+          done
 
       - name: Deploy monitoring stack
         shell: bash
