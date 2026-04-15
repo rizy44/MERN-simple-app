@@ -18,6 +18,10 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success')
     runs-on: [self-hosted, linux]
+    env:
+      HELM_CACHE_HOME: /tmp/.helm/cache
+      HELM_CONFIG_HOME: /tmp/.helm/config
+      HELM_DATA_HOME: /tmp/.helm/data
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -63,7 +67,8 @@ jobs:
       - name: Add and update Prometheus Helm repo
         shell: bash
         run: |
-          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --timeout 3m
+        
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --timeout 5m
           helm repo update
 
       - name: Deploy monitoring stack
