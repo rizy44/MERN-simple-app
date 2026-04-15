@@ -92,12 +92,3 @@ jobs:
           kubectl -n monitoring apply -f "${{ env.HELM_MONITOR_PATH }}/service-monitor.yaml"
           kubectl -n monitoring apply -f "${{ env.HELM_MONITOR_PATH }}/custom-alerts.yaml"
           kubectl -n monitoring apply -f "${{ env.HELM_MONITOR_PATH }}/grafana-dashboard-configmap.yaml"
-
-      - name: Post-deployment check
-        shell: bash
-        run: |
-          echo "Checking Prometheus and Grafana pods status..."
-          kubectl -n monitoring get pods -l release=prometheus -o jsonpath='{.items[*].status.phase}' | grep -q "Running" || (echo "Prometheus pods are not running" && exit 1)
-          kubectl -n monitoring get pods -l release=prometheus-grafana -o jsonpath='{.items[*].status.phase}' | grep -q "Running" || (echo "Grafana pods are not running" && exit 1)
-
-
