@@ -42,6 +42,14 @@ jobs:
           helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
           helm repo update
 
+      - name: Substitute secrets in alertmanager config
+        shell: bash
+        run: |
+          # Create temp file with secrets substituted
+          envsubst < "${{ env.HELM_MONITOR_PATH }}/alertmanager-config.yaml" > /tmp/alertmanager-config.yaml
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
       - name: Deploy monitoring stack
         shell: bash
         run: |
@@ -50,7 +58,7 @@ jobs:
             --create-namespace \
             -f "${{ env.HELM_MONITOR_PATH }}/prometheus-values.yaml" \
             -f "${{ env.HELM_MONITOR_PATH }}/grafana-values.yaml" \
-            -f "${{ env.HELM_MONITOR_PATH }}/alertmanager-config.yaml" \
+            -f /tmp/alertmanager-config.yaml \
             --wait --timeout 10m --atomic
       
       - name: Deploy custom alert and dashboard
