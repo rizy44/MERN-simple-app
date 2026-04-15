@@ -36,12 +36,6 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG }}" > "$HOME/.kube/config"
           chmod 600 "$HOME/.kube/config"
 
-      - name: Add Prometheus Helm repository
-        shell: bash
-        run: |
-          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-          helm repo update
-
       - name: Substitute secrets in alertmanager config
         shell: bash
         run: |
@@ -53,7 +47,7 @@ jobs:
       - name: Deploy monitoring stack
         shell: bash
         run: |
-          helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+          helm upgrade prometheus prometheus-community/kube-prometheus-stack \
             --namespace monitoring \
             --create-namespace \
             -f "${{ env.HELM_MONITOR_PATH }}/prometheus-values.yaml" \
