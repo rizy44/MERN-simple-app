@@ -2,7 +2,7 @@ name: Build and Push Images
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["Security Check"]
     types: [completed]
     branches: [main]
 
