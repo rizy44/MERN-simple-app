@@ -63,7 +63,7 @@ jobs:
       - name: Add and update Prometheus Helm repo
         shell: bash
         run: |
-          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts --timeout 15m
           helm repo update
 
       - name: Deploy monitoring stack
