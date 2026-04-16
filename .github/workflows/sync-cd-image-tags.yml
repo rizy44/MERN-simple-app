@@ -20,6 +20,7 @@ env:
 jobs:
   sync-image-tags:
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    environment: ENV
     runs-on: ubuntu-latest
     permissions:
       contents: read
