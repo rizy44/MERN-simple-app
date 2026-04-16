@@ -1,0 +1,243 @@
+name: Sync CD Image Tags
+
+on:
+  workflow_run:
+    workflows: ["Build and Push Images"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Source commit SHA to sync into the CD repo
+        required: true
+        type: string
+
+env:
+  CD_REPO: rizy44/MERN-cd-pipeline
+  CD_BASE_BRANCH: develop
+  CD_VALUES_FILE: helm-application/values.yaml
+
+jobs:
+  sync-image-tags:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Validate CD repository token
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "${{ secrets.CD_REPO_PAT }}" ] || (echo "CD_REPO_PAT is empty" && exit 1)
+
+      - name: Resolve source metadata
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            source_sha="${{ inputs.source_sha }}"
+          else
+            source_sha="${{ github.event.workflow_run.head_sha }}"
+          fi
+
+          if ! [[ "$source_sha" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "source_sha must be a 40-character hexadecimal SHA, got: $source_sha"
+            exit 1
+          fi
+
+          sha_short="${source_sha:0:7}"
+          backend_tag="backend-${source_sha}"
+          frontend_tag="frontend-${source_sha}"
+          branch_name="cd/sync-images-${sha_short}"
+
+          {
+            echo "source_sha=$source_sha"
+            echo "sha_short=$sha_short"
+            echo "backend_tag=$backend_tag"
+            echo "frontend_tag=$frontend_tag"
+            echo "branch_name=$branch_name"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout CD repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CD_REPO }}
+          ref: ${{ env.CD_BASE_BRANCH }}
+          token: ${{ secrets.CD_REPO_PAT }}
+          fetch-depth: 0
+
+      - name: Configure git author
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Update Helm values
+        id: update
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.meta.outputs.source_sha }}
+          BACKEND_TAG: ${{ steps.meta.outputs.backend_tag }}
+          FRONTEND_TAG: ${{ steps.meta.outputs.frontend_tag }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+          import sys
+
+          values_path = Path(os.environ["CD_VALUES_FILE"])
+          if not values_path.exists():
+              raise SystemExit(f"Missing expected file: {values_path}")
+
+          backend_tag = os.environ["BACKEND_TAG"]
+          frontend_tag = os.environ["FRONTEND_TAG"]
+
+          lines = values_path.read_text(encoding="utf-8").splitlines()
+          new_lines = []
+          section = None
+          image_indent = None
+          in_image_block = False
+          tag_replaced = {"backend": False, "frontend": False}
+          old_tags = {}
+
+          for line in lines:
+              stripped = line.lstrip()
+              indent = len(line) - len(stripped)
+
+              if indent == 0 and stripped == "backend:":
+                  section = "backend"
+                  image_indent = None
+                  in_image_block = False
+              elif indent == 0 and stripped == "frontend:":
+                  section = "frontend"
+                  image_indent = None
+                  in_image_block = False
+              elif section in ("backend", "frontend") and stripped == "image:":
+                  image_indent = indent
+                  in_image_block = True
+              elif in_image_block and stripped and not stripped.startswith("#") and image_indent is not None and indent <= image_indent:
+                  in_image_block = False
+                  image_indent = None
+
+              if in_image_block and section in ("backend", "frontend") and not tag_replaced[section]:
+                  match = re.match(r'^(\s*tag:\s*)(.*?)(\s*)$', line)
+                  if match:
+                      old_tags[section] = match.group(2)
+                      replacement = backend_tag if section == "backend" else frontend_tag
+                      if old_tags[section] != replacement:
+                          line = f"{match.group(1)}{replacement}{match.group(3)}"
+                      tag_replaced[section] = True
+
+              new_lines.append(line)
+
+          missing = [name for name in ("backend", "frontend") if name not in old_tags]
+          if missing:
+              raise SystemExit(f"Could not locate image tag line(s) for: {', '.join(missing)}")
+
+          changed = old_tags["backend"] != backend_tag or old_tags["frontend"] != frontend_tag
+          output_path = Path(os.environ["GITHUB_OUTPUT"])
+          with output_path.open("a", encoding="utf-8") as handle:
+              handle.write(f"old_backend_tag={old_tags['backend']}\n")
+              handle.write(f"old_frontend_tag={old_tags['frontend']}\n")
+              handle.write(f"new_backend_tag={backend_tag}\n")
+              handle.write(f"new_frontend_tag={frontend_tag}\n")
+              handle.write(f"changed={'true' if changed else 'false'}\n")
+
+          if not changed:
+              print("Image tags already match the requested SHA; skipping commit and PR creation.")
+              sys.exit(0)
+
+          values_path.write_text("\n".join(new_lines) + "\n", encoding="utf-8")
+          print(f"Updated {values_path} with backend={backend_tag} and frontend={frontend_tag}")
+          PY
+
+      - name: Commit and push sync branch
+        if: ${{ steps.update.outputs.changed == 'true' }}
+        shell: bash
+        env:
+          BRANCH_NAME: ${{ steps.meta.outputs.branch_name }}
+          SOURCE_SHA: ${{ steps.meta.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          git checkout -b "$BRANCH_NAME"
+          git add "$CD_VALUES_FILE"
+          git commit -m "chore(cd): sync image tags for ${SOURCE_SHA}"
+          git push --set-upstream origin "$BRANCH_NAME"
+
+      - name: Create or reuse PR
+        id: pr
+        if: ${{ steps.update.outputs.changed == 'true' }}
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.CD_REPO_PAT }}
+          BRANCH_NAME: ${{ steps.meta.outputs.branch_name }}
+          SOURCE_SHA: ${{ steps.meta.outputs.source_sha }}
+          BACKEND_TAG: ${{ steps.meta.outputs.backend_tag }}
+          FRONTEND_TAG: ${{ steps.meta.outputs.frontend_tag }}
+          OLD_BACKEND_TAG: ${{ steps.update.outputs.old_backend_tag }}
+          OLD_FRONTEND_TAG: ${{ steps.update.outputs.old_frontend_tag }}
+        run: |
+          set -euo pipefail
+
+          open_pr_url="$(gh pr list --repo "$CD_REPO" --head "$BRANCH_NAME" --base "$CD_BASE_BRANCH" --state open --json url --jq '.[0].url // empty')"
+          if [ -n "$open_pr_url" ]; then
+            echo "Reusing existing open PR: $open_pr_url"
+            {
+              echo "pr_url=$open_pr_url"
+              echo "pr_state=reused"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          existing_pr_state="$(gh pr list --repo "$CD_REPO" --head "$BRANCH_NAME" --base "$CD_BASE_BRANCH" --state all --json state --jq '.[0].state // empty')"
+          if [ -n "$existing_pr_state" ]; then
+            echo "A PR for $BRANCH_NAME already exists in state $existing_pr_state. Refusing to create a duplicate PR."
+            exit 1
+          fi
+
+          pr_title="chore(cd): sync image tags for ${SOURCE_SHA}"
+          pr_body="$(printf '%s\n' \
+            "Automated image tag sync from source SHA ${SOURCE_SHA}." \
+            "" \
+            "- Backend image tag: ${BACKEND_TAG}" \
+            "- Frontend image tag: ${FRONTEND_TAG}" \
+            "- Updated file: ${CD_VALUES_FILE}" \
+            "" \
+            "Old tags:" \
+            "- backend.image.tag: ${OLD_BACKEND_TAG:-<empty>}" \
+            "- frontend.image.tag: ${OLD_FRONTEND_TAG:-<empty>}" \
+            "" \
+            "This PR is intended for manual review and merge before ArgoCD consumes the develop branch." \
+          )"
+
+          created_pr_url="$(gh pr create --repo "$CD_REPO" --base "$CD_BASE_BRANCH" --head "$BRANCH_NAME" --title "$pr_title" --body "$pr_body")"
+          {
+            echo "pr_url=$created_pr_url"
+            echo "pr_state=created"
+          } >> "$GITHUB_OUTPUT"
+          echo "Created PR: $created_pr_url"
+
+      - name: Publish summary
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "### CD image sync"
+            echo "- Source SHA: \`${{ steps.meta.outputs.source_sha }}\`"
+            echo "- Branch: \`${{ steps.meta.outputs.branch_name }}\`"
+            echo "- backend.image.tag: \`${{ steps.update.outputs.old_backend_tag }}\` -> \`${{ steps.update.outputs.new_backend_tag }}\`"
+            echo "- frontend.image.tag: \`${{ steps.update.outputs.old_frontend_tag }}\` -> \`${{ steps.update.outputs.new_frontend_tag }}\`"
+            if [ "${{ steps.update.outputs.changed }}" = "true" ]; then
+              echo "- Result: synced"
+              echo "- PR state: ${{ steps.pr.outputs.pr_state }}"
+              echo "- PR URL: ${{ steps.pr.outputs.pr_url }}"
+            else
+              echo "- Result: no changes needed"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
